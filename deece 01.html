@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迪测智能 | 电力巡检全栈解决方案</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dice: {
+                            dark: '#0F172A',
+                            darker: '#020617',
+                            cyan: '#06B6D4',
+                            orange: '#F97316',
+                            gray: '#94A3B8'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Inter"', '"Noto Sans SC"', 'sans-serif'],
+                    },
+                    backgroundImage: {
+                        'grid-pattern': "linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)",
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', 'Noto Sans SC', sans-serif; background-color: #0F172A; color: #fff; overflow-x: hidden; }
+        .bg-grid { background-size: 40px 40px; mask-image: radial-gradient(circle at center, black 40%, transparent 100%); -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%); }
+        .glass-card { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s ease; }
+        .glass-card:hover { border-color: #06B6D4; transform: translateY(-5px); box-shadow: 0 10px 30px -10px rgba(6, 182, 212, 0.3); }
+        .thermal-hover { position: relative; overflow: hidden; }
+        .thermal-hover::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(45deg, rgba(255,0,0,0.2), rgba(0,255,255,0.2)); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .thermal-hover:hover::after { opacity: 1; }
+        .text-gradient { background: linear-gradient(to right, #06B6D4, #3B82F6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        /* 下拉菜单样式 */
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            border-radius: 8px;
+            min-width: 220px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+        .dropdown:hover .dropdown-menu { display: block; animation: slideDown 0.2s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .dropdown-menu a { display: block; padding: 12px 16px; color: #94A3B8; font-size: 14px; transition: all 0.2s; }
+        .dropdown-menu a:hover { background: rgba(6, 182, 212, 0.1); color: #06B6D4; }
+        
+        /* 模态框样式 */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); z-index: 1000; backdrop-filter: blur(5px); }
+        .modal.active { display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-content { background: #1E293B; border-radius: 16px; max-width: 900px; width: 90%; max-height: 90vh; overflow-y: auto; border: 1px solid rgba(6, 182, 212, 0.3); position: relative; }
+        .modal-close { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+        .modal-close:hover { background: rgba(239, 68, 68, 0.8); }
+    </style>
+</head>
+<body class="antialiased selection:bg-dice-cyan selection:text-dice-dark">
+
+    <div class="fixed inset-0 bg-grid-pattern bg-grid opacity-20 pointer-events-none z-0"></div>
+
+    <!-- 导航栏 -->
+    <nav class="fixed w-full z-50 glass-card border-b border-gray-800/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex-shrink-0 flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-dice-cyan to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <span class="font-bold text-2xl tracking-wider text-white">迪测<span class="text-dice-cyan">智能</span></span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-2">
+                        <a href="#home" class="hover:text-dice-cyan transition px-4 py-2 rounded-md text-sm font-medium">首页</a>
+                        
+                        <!-- 解决方案下拉菜单 -->
+                        <div class="relative dropdown">
+                            <button class="hover:text-dice-cyan transition px-4 py-2 rounded-md text-sm font-medium flex items-center gap-1">
+                                解决方案
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="dropdown-menu">
+                                <a href="#solution-transmission" onclick="openModal('modal-transmission')">输电线路巡检</a>
+                                <a href="#solution-substation" onclick="openModal('modal-substation')">变电站巡检</a>
+                                <a href="#solution-distribution" onclick="openModal('modal-distribution')">配网巡检</a>
+                                <a href="#solution-emergency" onclick="openModal('modal-emergency')">应急作业</a>
+                            </div>
+                        </div>
+                        
+                        <!-- 核心产品下拉菜单 -->
+                        <div class="relative dropdown">
+                            <button class="hover:text-dice-cyan transition px-4 py-2 rounded-md text-sm font-medium flex items-center gap-1">
+                                核心产品
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="dropdown-menu">
+                                <a href="#product-hangar" onclick="openModal('modal-hangar')">DC-635 室内机库</a>
+                                <a href="#product-amphibious" onclick="openModal('modal-amphibious')">两栖巡检机器人</a>
+                                <a href="#product-washing" onclick="openModal('modal-washing')">带电水冲洗系统</a>
+                                <a href="#product-ai" onclick="openModal('modal-ai')">边缘计算系统</a>
+                                <a href="#product-uv" onclick="openModal('modal-uv')">紫外检测系统</a>
+                                <a href="#product-ice" onclick="openModal('modal-ice')">除冰机器人</a>
+                            </div>
+                        </div>
+                        
+                        <a href="#technology" class="hover:text-dice-cyan transition px-4 py-2 rounded-md text-sm font-medium">技术优势</a>
+                        <a href="#cases" class="hover:text-dice-cyan transition px-4 py-2 rounded-md text-sm font-medium">成功案例</a>
+                        <a href="#contact" class="bg-dice-cyan text-dice-dark hover:bg-white transition px-6 py-2.5 rounded-full text-sm font-bold shadow-lg shadow-cyan-500/20">联系合作</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div class="text-center max-w-4xl mx-auto">
+                <div class="inline-block px-4 py-1.5 rounded-full border border-dice-cyan/30 bg-dice-cyan/10 text-dice-cyan text-sm font-semibold mb-6">
+                    🚀 定义电力巡检新标准
+                </div>
+                <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
+                    从空中到地面，<br>
+                    <span class="text-gradient">全栈智能巡检</span>解决方案
+                </h1>
+                <p class="text-xl text-dice-gray mb-10 max-w-2xl mx-auto leading-relaxed">
+                    迪测智能提供从硬件机器人、特种载荷到 AI 算法平台的一站式服务。<br>
+                    让电力运维更安全、更高效、更智能。
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="#solutions" class="bg-dice-cyan text-dice-dark px-8 py-4 rounded-full font-bold text-lg hover:bg-white transition shadow-[0_0_30px_rgba(6,182,212,0.4)]">
+                        探索解决方案
+                    </a>
+                    <a href="#contact" class="border border-gray-600 text-white px-8 py-4 rounded-full font-bold text-lg hover:border-dice-cyan hover:text-dice-cyan transition bg-dice-dark/50 backdrop-blur-sm">
+                        获取定制方案
+                    </a>
+                </div>
+            </div>
+
+            <!-- 核心数据信任状 -->
+            <div class="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 border-t border-gray-800 pt-10">
+                <div class="text-center">
+                    <div class="text-3xl md:text-4xl font-bold text-white mb-2">100%</div>
+                    <div class="text-sm text-dice-gray">覆盖输/配/变全场景</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl md:text-4xl font-bold text-white mb-2">-20°C~50°C</div>
+                    <div class="text-sm text-dice-gray">极端环境稳定作业</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl md:text-4xl font-bold text-white mb-2">&gt;95%</div>
+                    <div class="text-sm text-dice-gray">AI 缺陷识别准确率</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-3xl md:text-4xl font-bold text-white mb-2">500%</div>
+                    <div class="text-sm text-dice-gray">带电水冲洗效率提升</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 解决方案 Section -->
+    <section id="solutions" class="py-24 bg-dice-darker relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-dice-cyan font-semibold tracking-wide uppercase text-sm mb-2">Solutions</h2>
+                <h3 class="text-3xl md:text-4xl font-extrabold text-white">全场景电力巡检解决方案</h3>
+                <p class="mt-4 text-dice-gray max-w-2xl mx-auto">不只是卖设备，我们解决您最头疼的运维难题。</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- 输电线路 -->
+                <div class="glass-card p-8 rounded-2xl relative overflow-hidden group cursor-pointer" onclick="openModal('modal-transmission')">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="px-3 py-1 bg-blue-900/50 text-blue-400 text-xs font-bold rounded-full border border-blue-800">输电线路</span>
+                            <span class="text-dice-cyan text-sm">点击查看详情 →</span>
+                        </div>
+                        <h4 class="text-2xl font-bold text-white mb-4">架空线路精细化巡检</h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <span class="text-red-400 mt-1">●</span>
+                                <div><p class="text-sm font-bold text-gray-300">痛点</p><p class="text-sm text-gray-500">登塔高危、导线缺陷难发现、覆冰清理难</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-dice-cyan mt-1">★</span>
+                                <div><p class="text-sm font-bold text-gray-300">方案</p><p class="text-sm text-gray-400">两栖巡检机器人 + 紫外/红外载荷 + AI 缺陷识别</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div><p class="text-sm font-bold text-gray-300">价值</p><p class="text-sm text-gray-400">360°无死角检测，无需登塔，效率提升 80%</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 变电站 -->
+                <div class="glass-card p-8 rounded-2xl relative overflow-hidden group cursor-pointer" onclick="openModal('modal-substation')">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="px-3 py-1 bg-purple-900/50 text-purple-400 text-xs font-bold rounded-full border border-purple-800">变电站</span>
+                            <span class="text-dice-cyan text-sm">点击查看详情 →</span>
+                        </div>
+                        <h4 class="text-2xl font-bold text-white mb-4">室内无人化自主巡检</h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <span class="text-red-400 mt-1">●</span>
+                                <div><p class="text-sm font-bold text-gray-300">痛点</p><p class="text-sm text-gray-500">室内无 GPS 信号、电磁干扰强、人工巡检效率低</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-dice-cyan mt-1">★</span>
+                                <div><p class="text-sm font-bold text-gray-300">方案</p><p class="text-sm text-gray-400">DC-635 室内机库 + SLAM 厘米级定位 + 气体检测</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div><p class="text-sm font-bold text-gray-300">价值</p><p class="text-sm text-gray-400">全自动起降充电，无人值守，规避狭窄空间风险</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配电网 -->
+                <div class="glass-card p-8 rounded-2xl relative overflow-hidden group cursor-pointer" onclick="openModal('modal-distribution')">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="px-3 py-1 bg-green-900/50 text-green-400 text-xs font-bold rounded-full border border-green-800">配电网</span>
+                            <span class="text-dice-cyan text-sm">点击查看详情 →</span>
+                        </div>
+                        <h4 class="text-2xl font-bold text-white mb-4">配网自动化与隐患监测</h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <span class="text-red-400 mt-1">●</span>
+                                <div><p class="text-sm font-bold text-gray-300">痛点</p><p class="text-sm text-gray-500">点位多面广、人工效率低、隐蔽缺陷难发现</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-dice-cyan mt-1">★</span>
+                                <div><p class="text-sm font-bold text-gray-300">方案</p><p class="text-sm text-gray-400">视觉引导 AI 自主巡检 APP + 微型紫外载荷 + 卫星遥感</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div><p class="text-sm font-bold text-gray-300">价值</p><p class="text-sm text-gray-400">一键起飞、自动寻塔打点，12 种缺陷 AI 自动识别</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 应急作业 -->
+                <div class="glass-card p-8 rounded-2xl relative overflow-hidden group cursor-pointer" onclick="openModal('modal-emergency')">
+                    <div class="relative z-10">
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="px-3 py-1 bg-orange-900/50 text-orange-400 text-xs font-bold rounded-full border border-orange-800">应急作业</span>
+                            <span class="text-dice-cyan text-sm">点击查看详情 →</span>
+                        </div>
+                        <h4 class="text-2xl font-bold text-white mb-4">不停电除冰与水冲洗</h4>
+                        <div class="space-y-3">
+                            <div class="flex items-start gap-3">
+                                <span class="text-red-400 mt-1">●</span>
+                                <div><p class="text-sm font-bold text-gray-300">痛点</p><p class="text-sm text-gray-500">覆冰灾害导致断线、绝缘子污闪、停电损失大</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-dice-cyan mt-1">★</span>
+                                <div><p class="text-sm font-bold text-gray-300">方案</p><p class="text-sm text-gray-400">变频振动除冰机器人 + 重载无人机带电水冲洗系统</p></div>
+                            </div>
+                            <div class="flex items-start gap-3">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <div><p class="text-sm font-bold text-gray-300">价值</p><p class="text-sm text-gray-400">不停电作业，人机分离，效率提升 5-6 倍</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 核心产品 Section -->
+    <section id="products" class="py-24 bg-dice-dark relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-dice-cyan font-semibold tracking-wide uppercase text-sm mb-2">Products</h2>
+                <h3 class="text-3xl md:text-4xl font-extrabold text-white">硬核产品矩阵</h3>
+                <p class="mt-4 text-dice-gray max-w-2xl mx-auto">自研硬件 + 智能算法，打造电力巡检利器。</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 产品卡片 - DC-635 室内机库 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-hangar')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/27ee0b6bacea4f56b99eb5e130d39fa1_0_visibleWatermark.png" alt="DC-635 室内无人机机库" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-dice-cyan text-dice-dark text-xs font-bold px-3 py-1 rounded-tr-lg">变电巡检</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">DC-635 室内无人机机库</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">适配大疆/道通系列，无 GPS 环境下厘米级定位，实现变电站室内全自动无人值守巡检。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 激光雷达 + SLAM 精准定位</li>
+                            <li>• -20°C~50°C 极端环境适应</li>
+                            <li>• 自动起降与充电</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 产品卡片 - 两栖机器人 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-amphibious')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/7a3bc9efd5bf423f9df9f63b99755890_0_visibleWatermark.png" alt="两栖机器人" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-tr-lg">输电巡检</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">架空线路两栖巡检机器人</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">飞行 + 走线双模式，一键降落导线，360°全覆盖精细化巡检，替代人工登塔。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 视觉 AI 自主降落导线</li>
+                            <li>• 3 颗 800 万像素摄像头</li>
+                            <li>• 线上行走速度 1.5m/s</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 产品卡片 - 带电水冲洗 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-washing')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/4f53461874d64e1f860a4ccba4090fe7_0_visibleWatermark.png" alt="带电水冲洗" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-orange-600 text-white text-xs font-bold px-3 py-1 rounded-tr-lg">应急作业</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">无人机带电水冲洗系统</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">40kg 重载无人机搭载毫米波雷达，实现绝缘子不停电清洗，效率提升 5-6 倍。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 毫米波雷达精准避障</li>
+                            <li>• 人机分离，安全系数高</li>
+                            <li>• 适用于各种塔型</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 产品卡片 - 边缘计算 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-ai')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/99f56a2671c34f098abb35a91221e6b0_0_visibleWatermark.png" alt="边缘计算" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-tr-lg">AI 软件</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">边缘计算缺陷识别系统</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">离线批处理巡检图片，AI 自动识别 12 种常见配网缺陷，生成标准化报告。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 支持 12 种缺陷全自主识别</li>
+                            <li>• 算法定期迭代更新</li>
+                            <li>• 自动报告生成</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 产品卡片 - 紫外检测 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-uv')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/ccb6f1ae7af7477db1e4a4db4ef5b927_0_visibleWatermark.png" alt="紫外检测" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-tr-lg">检测载荷</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">日盲紫外巡检系统</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">四合一载荷 (可见光 + 红外 + 紫外 + 激光)，精准定位电晕电弧，全天候带电检测。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 日盲型紫外机芯</li>
+                            <li>• 单光子检测灵敏度</li>
+                            <li>• 适配 M300/M3/M4</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 产品卡片 - 除冰机器人 -->
+                <div class="glass-card rounded-xl overflow-hidden thermal-hover group cursor-pointer" onclick="openModal('modal-ice')">
+                    <div class="h-48 relative overflow-hidden">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/e5169b135d394f3b888d45f6b748c23f_0_visibleWatermark.png" alt="除冰机器人" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition">
+                        <div class="absolute bottom-0 left-0 bg-cyan-700 text-white text-xs font-bold px-3 py-1 rounded-tr-lg">特种作业</div>
+                    </div>
+                    <div class="p-6">
+                        <h4 class="text-xl font-bold text-white mb-2">变频振动除冰机器人</h4>
+                        <p class="text-sm text-gray-400 mb-4 line-clamp-2">600kg 冲击力，变频共振除冰，无需复杂爬行机构，快速跨越障碍，不停电作业。</p>
+                        <ul class="text-xs text-gray-500 space-y-1 mb-4">
+                            <li>• 变频振动技术</li>
+                            <li>• 600kg 冲击力</li>
+                            <li>• 蛙跳式作业</li>
+                        </ul>
+                        <div class="pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-dice-cyan font-semibold">点击查看详情 →</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 核心技术 Section -->
+    <section id="technology" class="py-24 bg-dice-darker relative z-10 overflow-hidden">
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-dice-darker to-dice-darker pointer-events-none"></div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div class="text-center mb-16">
+                <h2 class="text-dice-cyan font-semibold tracking-wide uppercase text-sm mb-2">Technology</h2>
+                <h3 class="text-3xl md:text-4xl font-extrabold text-white">构建技术护城河</h3>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="p-6 rounded-xl border border-gray-800 bg-dice-dark/50 hover:border-dice-cyan transition">
+                    <div class="w-12 h-12 bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-400 mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h4 class="text-lg font-bold text-white mb-2">视觉 AI 与 SLAM</h4>
+                    <p class="text-sm text-gray-400">无 GPS 环境下厘米级定位，导线自动识别，一键自主降落，智能路径规划。</p>
+                </div>
+                <div class="p-6 rounded-xl border border-gray-800 bg-dice-dark/50 hover:border-dice-cyan transition">
+                    <div class="w-12 h-12 bg-purple-900/30 rounded-lg flex items-center justify-center text-purple-400 mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    </div>
+                    <h4 class="text-lg font-bold text-white mb-2">日盲紫外成像</h4>
+                    <p class="text-sm text-gray-400">单光子检测技术，高灵敏度捕捉电晕放电，抗阳光干扰，定量分析缺陷。</p>
+                </div>
+                <div class="p-6 rounded-xl border border-gray-800 bg-dice-dark/50 hover:border-dice-cyan transition">
+                    <div class="w-12 h-12 bg-green-900/30 rounded-lg flex items-center justify-center text-green-400 mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    </div>
+                    <h4 class="text-lg font-bold text-white mb-2">边缘计算与深度学习</h4>
+                    <p class="text-sm text-gray-400">12 种配网缺陷实时识别，离线批处理，算法持续迭代，自动生成巡检报告。</p>
+                </div>
+                <div class="p-6 rounded-xl border border-gray-800 bg-dice-dark/50 hover:border-dice-cyan transition">
+                    <div class="w-12 h-12 bg-orange-900/30 rounded-lg flex items-center justify-center text-orange-400 mb-4">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    </div>
+                    <h4 class="text-lg font-bold text-white mb-2">多模态数据融合</h4>
+                    <p class="text-sm text-gray-400">可见光 + 红外 + 紫外 + 激光测距四维一体，全方位感知设备状态，精准定位隐患。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 案例展示 Section -->
+    <section id="cases" class="py-24 bg-dice-dark relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-dice-cyan font-semibold tracking-wide uppercase text-sm mb-2">Case Studies</h2>
+                <h3 class="text-3xl md:text-4xl font-extrabold text-white">实战见证实力</h3>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-1/3 h-48 bg-gray-800 rounded-xl overflow-hidden flex-shrink-0">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/9824e8bfeae24e6b89a1abc4cea4e516_0_visibleWatermark.png" alt="覆冰治理" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-xl font-bold text-white mb-2">某省级电网冬季覆冰治理项目</h4>
+                        <p class="text-sm text-gray-400 mb-4">针对高海拔山区线路覆冰难题，部署变频振动除冰机器人。</p>
+                        <div class="space-y-2 mb-4">
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">作业效率</span><span class="text-dice-cyan font-bold">提升 300%</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">停电时间</span><span class="text-dice-cyan font-bold">减少 90%</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">除冰厚度</span><span class="text-dice-cyan font-bold">可达 30mm</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-1/3 h-48 bg-gray-800 rounded-xl overflow-hidden flex-shrink-0">
+                        <img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/b72bea690a544c4e821e41db814892fa_0_visibleWatermark.png" alt="变电站巡检" class="w-full h-full object-cover">
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="text-xl font-bold text-white mb-2">某 500kV 变电站室内自主巡检</h4>
+                        <p class="text-sm text-gray-400 mb-4">部署 DC-635 室内机库，实现高压室、GIS 室的无人化日常巡视。</p>
+                        <div class="space-y-2 mb-4">
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">定位精度</span><span class="text-dice-cyan font-bold">±2cm</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">人力成本</span><span class="text-dice-cyan font-bold">降低 80%</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-gray-500">响应速度</span><span class="text-dice-cyan font-bold">分钟级</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 联系我们 Section -->
+    <section id="contact" class="py-24 bg-dice-darker relative z-10">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-white mb-4">开启智能巡检新时代</h2>
+                <p class="text-dice-gray">无论您需要定制化的硬件集成，还是复杂的任务规划，<br>迪测智能专家团队随时为您提供支持。</p>
+            </div>
+            <form class="glass-card p-8 md:p-10 rounded-2xl space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div><label class="block text-sm font-medium text-gray-400 mb-2">姓名</label><input type="text" class="w-full bg-dice-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-dice-cyan focus:ring-1 focus:ring-dice-cyan transition" placeholder="您的称呼"></div>
+                    <div><label class="block text-sm font-medium text-gray-400 mb-2">公司名称</label><input type="text" class="w-full bg-dice-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-dice-cyan focus:ring-1 focus:ring-dice-cyan transition" placeholder="贵公司全称"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div><label class="block text-sm font-medium text-gray-400 mb-2">联系电话</label><input type="tel" class="w-full bg-dice-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-dice-cyan focus:ring-1 focus:ring-dice-cyan transition" placeholder="手机号码"></div>
+                    <div><label class="block text-sm font-medium text-gray-400 mb-2">主要关注电压等级</label>
+                        <select class="w-full bg-dice-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-dice-cyan focus:ring-1 focus:ring-dice-cyan transition">
+                            <option>不限</option><option>特高压 (1000kV/±800kV)</option><option>500kV / 330kV</option><option>220kV / 110kV</option><option>35kV / 10kV 配网</option>
+                        </select>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-400 mb-2">感兴趣的业务方向</label>
+                    <div class="flex flex-wrap gap-3">
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-700 cursor-pointer hover:border-dice-cyan hover:bg-dice-cyan/10 transition"><input type="checkbox" class="accent-dice-cyan"><span class="text-sm text-gray-300">输电巡检</span></label>
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-700 cursor-pointer hover:border-dice-cyan hover:bg-dice-cyan/10 transition"><input type="checkbox" class="accent-dice-cyan"><span class="text-sm text-gray-300">变电室内巡检</span></label>
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-700 cursor-pointer hover:border-dice-cyan hover:bg-dice-cyan/10 transition"><input type="checkbox" class="accent-dice-cyan"><span class="text-sm text-gray-300">配网自动化</span></label>
+                        <label class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-700 cursor-pointer hover:border-dice-cyan hover:bg-dice-cyan/10 transition"><input type="checkbox" class="accent-dice-cyan"><span class="text-sm text-gray-300">应急除冰/水冲洗</span></label>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-medium text-gray-400 mb-2">详细需求描述</label><textarea rows="4" class="w-full bg-dice-dark border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-dice-cyan focus:ring-1 focus:ring-dice-cyan transition" placeholder="请简述您的应用场景、痛点或具体需求..."></textarea></div>
+                <button type="button" class="w-full bg-dice-cyan text-dice-dark font-bold py-4 rounded-lg hover:bg-white transition shadow-lg shadow-cyan-500/20 text-lg">发送咨询请求</button>
+                <p class="text-xs text-center text-gray-500 mt-4">我们将严格保密您的信息，并在 24 小时内由专业技术顾问与您联系。</p>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-black py-12 border-t border-gray-900 relative z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-8">
+                <div class="mb-6 md:mb-0 text-center md:text-left">
+                    <div class="flex items-center justify-center md:justify-start gap-2 mb-2">
+                        <div class="w-8 h-8 bg-gradient-to-br from-dice-cyan to-blue-600 rounded flex items-center justify-center">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        </div>
+                        <span class="font-bold text-xl tracking-wider text-white">迪测<span class="text-dice-cyan">智能</span></span>
+                    </div>
+                    <p class="text-gray-500 text-sm">武汉迪测智能科技有限公司</p>
+                    <p class="text-gray-600 text-xs mt-1">专注电力智能巡检技术研发与应用</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-500 hover:text-dice-cyan transition text-sm">隐私政策</a>
+                    <a href="#" class="text-gray-500 hover:text-dice-cyan transition text-sm">服务条款</a>
+                    <a href="#" class="text-gray-500 hover:text-dice-cyan transition text-sm">加入我们</a>
+                </div>
+            </div>
+            <div class="border-t border-gray-900 pt-8 text-center text-gray-600 text-xs">&copy; 2025 DiceTech Intelligence. All rights reserved.</div>
+        </div>
+    </footer>
+
+    <!-- ========== 模态框详情页面 ========== -->
+    
+    <!-- 解决方案详情模态框 -->
+    <div id="modal-transmission" class="modal" onclick="closeModal(event, 'modal-transmission')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-transmission')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/8bfd129b75234c3cbad9c52a3865324c_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-4">输电线路精细化巡检解决方案</h3>
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-red-400 font-bold mb-2">● 客户痛点</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 登塔作业安全风险高</li><li>• 导线缺陷人工检测难发现</li><li>• 覆冰清理耗时耗力</li><li>• 夜间/恶劣天气无法作业</li></ul></div>
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">★ 迪测方案</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 两栖巡检机器人 (飞行 + 走线)</li><li>• 日盲紫外 + 红外热成像载荷</li><li>• AI 缺陷自动识别系统</li><li>• 视觉引导自主降落导线</li></ul></div>
+                </div>
+                <div class="bg-gradient-to-r from-green-900/30 to-dice-cyan/10 p-6 rounded-lg mb-6">
+                    <h4 class="text-green-400 font-bold mb-3">✓ 核心价值</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center"><div class="text-2xl font-bold text-white">80%</div><div class="text-xs text-gray-400">效率提升</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">360°</div><div class="text-xs text-gray-400">全覆盖检测</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">0</div><div class="text-xs text-gray-400">登塔作业</div></div>
+                    </div>
+                </div>
+                <div class="border-t border-gray-700 pt-6"><h4 class="text-lg font-bold text-white mb-3">推荐产品组合</h4><div class="flex flex-wrap gap-2"><span class="px-3 py-1 bg-dice-cyan/20 text-dice-cyan text-sm rounded-full">两栖巡检机器人</span><span class="px-3 py-1 bg-dice-cyan/20 text-dice-cyan text-sm rounded-full">紫外检测系统</span><span class="px-3 py-1 bg-dice-cyan/20 text-dice-cyan text-sm rounded-full">边缘计算系统</span></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-substation" class="modal" onclick="closeModal(event, 'modal-substation')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-substation')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/b72bea690a544c4e821e41db814892fa_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-4">变电站室内无人化自主巡检</h3>
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-red-400 font-bold mb-2">● 客户痛点</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 室内无 GPS 信号定位难</li><li>• 强电磁干扰环境影响</li><li>• 人工巡检效率低成本高</li><li>• 狭窄空间作业风险大</li></ul></div>
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">★ 迪测方案</h4><ul class="text-sm text-gray-400 space-y-1"><li>• DC-635 室内无人机机库</li><li>• 激光雷达 SLAM 厘米级定位</li><li>• 多气体检测传感器</li><li>• 全自动起降充电系统</li></ul></div>
+                </div>
+                <div class="bg-gradient-to-r from-green-900/30 to-dice-cyan/10 p-6 rounded-lg mb-6">
+                    <h4 class="text-green-400 font-bold mb-3">✓ 核心价值</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center"><div class="text-2xl font-bold text-white">±2cm</div><div class="text-xs text-gray-400">定位精度</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">80%</div><div class="text-xs text-gray-400">成本降低</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">7×24</div><div class="text-xs text-gray-400">小时值守</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-distribution" class="modal" onclick="closeModal(event, 'modal-distribution')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-distribution')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/b81af9fd4f7d480691d8813d8a37b800_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-4">配网自动化与隐患监测</h3>
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-red-400 font-bold mb-2">● 客户痛点</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 配网点位多分布广</li><li>• 人工巡检效率低下</li><li>• 隐蔽缺陷难以发现</li><li>• 外力破坏监测困难</li></ul></div>
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">★ 迪测方案</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 视觉引导 AI 自主巡检 APP</li><li>• 微型紫外检测载荷</li><li>• 卫星遥感监测系统</li><li>• 12 种缺陷 AI 识别</li></ul></div>
+                </div>
+                <div class="bg-gradient-to-r from-green-900/30 to-dice-cyan/10 p-6 rounded-lg mb-6">
+                    <h4 class="text-green-400 font-bold mb-3">✓ 核心价值</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center"><div class="text-2xl font-bold text-white">一键</div><div class="text-xs text-gray-400">自动起飞</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">12 种</div><div class="text-xs text-gray-400">缺陷识别</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">95%+</div><div class="text-xs text-gray-400">识别准确率</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-emergency" class="modal" onclick="closeModal(event, 'modal-emergency')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-emergency')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/9824e8bfeae24e6b89a1abc4cea4e516_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-4">不停电除冰与水冲洗作业</h3>
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-red-400 font-bold mb-2">● 客户痛点</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 覆冰灾害导致断线停电</li><li>• 绝缘子污闪事故频发</li><li>• 停电作业损失巨大</li><li>• 人工除冰安全风险高</li></ul></div>
+                    <div class="bg-dice-dark/50 p-4 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">★ 迪测方案</h4><ul class="text-sm text-gray-400 space-y-1"><li>• 变频振动除冰机器人</li><li>• 重载无人机带电水冲洗</li><li>• 毫米波雷达避障系统</li><li>• 人机分离远程操控</li></ul></div>
+                </div>
+                <div class="bg-gradient-to-r from-green-900/30 to-dice-cyan/10 p-6 rounded-lg mb-6">
+                    <h4 class="text-green-400 font-bold mb-3">✓ 核心价值</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center"><div class="text-2xl font-bold text-white">500%</div><div class="text-xs text-gray-400">效率提升</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">不停电</div><div class="text-xs text-gray-400">安全作业</div></div>
+                        <div class="text-center"><div class="text-2xl font-bold text-white">30mm</div><div class="text-xs text-gray-400">除冰厚度</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 产品详情模态框 -->
+    <div id="modal-hangar" class="modal" onclick="closeModal(event, 'modal-hangar')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-hangar')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/27ee0b6bacea4f56b99eb5e130d39fa1_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">DC-635 室内无人机机库</h3>
+                <p class="text-dice-cyan mb-6">变电站室内无人化巡检核心装备</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 适配大疆 M300/M30/M3 系列</li><li>• 激光雷达 + 视觉 SLAM 融合定位</li><li>• 自动起降、自动充电</li><li>• 远程任务调度与管理</li><li>• -20°C~50°C 宽温工作</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">技术参数</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 定位精度：±2cm</li><li>• 机库尺寸：635×635×800mm</li><li>• 防护等级：IP54</li><li>• 充电时间：90 分钟</li><li>• 通讯方式：4G/5G/WIFI</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">典型应用场景</h4><p class="text-sm text-gray-400">500kV/220kV 变电站高压室、GIS 室、继保室等室内空间的日常自动巡检，替代人工巡视，实现无人值守。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-amphibious" class="modal" onclick="closeModal(event, 'modal-amphibious')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-amphibious')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/7a3bc9efd5bf423f9df9f63b99755890_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">架空输电线路两栖巡检机器人</h3>
+                <p class="text-dice-cyan mb-6">飞行 + 走线双模式，360°无死角检测</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 视觉 AI 自主降落导线</li><li>• 飞行/走线双模式切换</li><li>• 3 颗 800 万像素高清摄像头</li><li>• 线上自主越障</li><li>• 远程实时图传</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">技术参数</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 整机重量：5.5kg</li><li>• 行走速度：1.5m/s</li><li>• 续航时间：飞行 30min/行走 2h</li><li>• 适用线径：Φ10-50mm</li><li>• 工作温度：-20°C~50°C</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">典型应用场景</h4><p class="text-sm text-gray-400">110kV-500kV 输电线路导线、地线的精细化巡检，替代人工登塔，检测绝缘子、金具、导线等缺陷。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-washing" class="modal" onclick="closeModal(event, 'modal-washing')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-washing')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/4f53461874d64e1f860a4ccba4090fe7_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">无人机带电水冲洗系统</h3>
+                <p class="text-dice-cyan mb-6">40kg 重载，不停电清洗绝缘子</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 40kg 大载重无人机平台</li><li>• 毫米波雷达精准避障</li><li>• 高压水泵远程控制系统</li><li>• 人机分离安全作业</li><li>• 适配各种塔型</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">技术参数</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 最大载重：40kg</li><li>• 水枪射程：5-15m</li><li>• 水箱容量：20L</li><li>• 作业效率：5-6 倍于人工</li><li>• 安全距离：≥3m</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">典型应用场景</h4><p class="text-sm text-gray-400">输电线路绝缘子污秽清洗，防止污闪事故，不停电作业，大幅降低停电损失。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-ai" class="modal" onclick="closeModal(event, 'modal-ai')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-ai')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/99f56a2671c34f098abb35a91221e6b0_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">边缘计算缺陷识别系统</h3>
+                <p class="text-dice-cyan mb-6">12 种配网缺陷 AI 自动识别</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 12 种配网缺陷全自主识别</li><li>• 离线批处理巡检图片</li><li>• 自动生成标准化报告</li><li>• 算法定期迭代更新</li><li>• 支持本地化部署</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">识别类型</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 绝缘子破损/自爆</li><li>• 金具锈蚀/变形</li><li>• 导线断股/磨损</li><li>• 绑扎带不规范</li><li>• 缺销钉/开口销</li><li>• ...等 12 种缺陷</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">技术优势</h4><p class="text-sm text-gray-400">基于深度学习的缺陷识别算法，识别准确率>95%，大幅减少人工审图工作量，提高巡检效率。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-uv" class="modal" onclick="closeModal(event, 'modal-uv')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-uv')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/ccb6f1ae7af7477db1e4a4db4ef5b927_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">日盲紫外巡检系统</h3>
+                <p class="text-dice-cyan mb-6">四合一载荷，精准定位电晕电弧</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 日盲型紫外成像机芯</li><li>• 可见光 + 红外 + 紫外 + 激光测距</li><li>• 单光子检测高灵敏度</li><li>• 全天候带电检测</li><li>• 适配 M300/M3/M4</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">技术参数</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 紫外波段：240-280nm</li><li>• 红外分辨率：640×512</li><li>• 可见光：4K 高清</li><li>• 激光测距：1200m</li><li>• 重量：<1.5kg</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">典型应用场景</h4><p class="text-sm text-gray-400">输电/变电设备电晕放电检测，绝缘子缺陷定位，金具发热检测，全天候带电作业。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-ice" class="modal" onclick="closeModal(event, 'modal-ice')">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModalBtn('modal-ice')"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
+            <div class="p-8">
+                <div class="h-64 bg-gray-800 rounded-xl mb-6 overflow-hidden"><img src="https://wanx.alicdn.com/wanx/1527796641774096/text_to_image_lite_v2/e5169b135d394f3b888d45f6b748c23f_0_visibleWatermark.png" class="w-full h-full object-cover"></div>
+                <h3 class="text-3xl font-bold text-white mb-2">变频振动除冰机器人</h3>
+                <p class="text-dice-cyan mb-6">600kg 冲击力，不停电高效除冰</p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div><h4 class="text-lg font-bold text-white mb-3">核心功能</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 变频振动除冰技术</li><li>• 600kg 冲击除冰力</li><li>• 蛙跳式快速越障</li><li>• 不停电带电作业</li><li>• 远程遥控操作</li></ul></div>
+                    <div><h4 class="text-lg font-bold text-white mb-3">技术参数</h4><ul class="text-sm text-gray-400 space-y-2"><li>• 除冰效率：300m/小时</li><li>• 适用冰厚：≤30mm</li><li>• 适用线径：Φ10-50mm</li><li>• 整机重量：8kg</li><li>• 工作温度：-40°C~50°C</li></ul></div>
+                </div>
+                <div class="mt-6 p-4 bg-dice-cyan/10 rounded-lg"><h4 class="text-dice-cyan font-bold mb-2">典型应用场景</h4><p class="text-sm text-gray-400">冬季输电线路覆冰清理，防止断线倒塔事故，不停电作业，保障电网迎峰度冬安全。</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 交互 -->
+    <script>
+        // 打开模态框
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // 关闭模态框 (点击背景)
+        function closeModal(event, modalId) {
+            if (event.target.id === modalId) {
+                document.getElementById(modalId).classList.remove('active');
+                document.body.style.overflow = 'auto';
+            }
+        }
+        
+        // 关闭模态框 (点击关闭按钮)
+        function closeModalBtn(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+        
+        // ESC 键关闭模态框
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const activeModals = document.querySelectorAll('.modal.active');
+                activeModals.forEach(modal => {
+                    modal.classList.remove('active');
+                });
+                document.body.style.overflow = 'auto';
+            }
+        });
+    </script>
+</body>
+</html>
